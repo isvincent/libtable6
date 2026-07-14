@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖書館館藏資訊儀表板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{
+  --paper:#F7F9FF;
+  --ink:#1E2A4A;
+  --ink-soft:#55628A;
+  --line:#DDE4F5;
+  --card:#FFFFFF;
+  --orange:#FF7A45;
+  --blue:#2F80ED;
+  --teal:#00B8A9;
+  --pink:#EF5DA8;
+  --yellow:#FFC53D;
+  --purple:#7C5CFC;
+  --green:#27AE60;
+  --red:#EB5757;
+  --radius:18px;
+  --shadow:0 4px 14px rgba(30,42,74,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:17px}
+body{
+  font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  line-height:1.65;
+}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit;font-size:1rem}
+
+/* ── 頂部書架橫幅 ───────────────────────── */
+header.hero{
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  padding:1.1rem 1.6rem .9rem;
+  position:relative;
+}
+.shelf{display:flex;align-items:flex-end;gap:5px;height:44px;margin-bottom:.7rem}
+.spine{width:15px;border-radius:4px 4px 0 0;transition:transform .25s}
+.spine:hover{transform:translateY(-6px)}
+.spine.lean{transform:rotate(9deg);transform-origin:bottom left}
+.spine.lean:hover{transform:rotate(9deg) translateY(-4px)}
+.hero-row{display:flex;flex-wrap:wrap;align-items:center;gap:1rem;justify-content:space-between}
+.hero h1{font-size:1.7rem;font-weight:900;letter-spacing:.06em}
+.hero h1 .accent{color:var(--blue)}
+.hero p.sub{color:var(--ink-soft);font-size:.98rem;margin-top:.15rem}
+.hero-actions{display:flex;gap:.6rem;flex-wrap:wrap}
+.btn{
+  border:none;border-radius:12px;padding:.6rem 1.05rem;
+  font-size:1rem;font-weight:700;color:#fff;
+  display:inline-flex;align-items:center;gap:.4rem;
+  box-shadow:var(--shadow);transition:transform .15s,filter .15s;
+}
+.btn:hover{transform:translateY(-2px);filter:brightness(1.07)}
+.btn:active{transform:translateY(0)}
+.btn-pdf{background:linear-gradient(135deg,var(--pink),var(--purple))}
+.btn-sound{background:#fff;color:var(--ink);border:2px solid var(--line);box-shadow:none}
+.btn-sound.off{opacity:.55}
+.btn-demo{background:linear-gradient(135deg,var(--teal),var(--blue))}
+
+/* ── 版面 ─────────────────────────────── */
+.layout{display:grid;grid-template-columns:330px 1fr;gap:1.2rem;padding:1.2rem 1.6rem 2.5rem;max-width:1700px;margin:0 auto}
+@media(max-width:980px){.layout{grid-template-columns:1fr}}
+
+/* ── 左側控制面板 ─────────────────────── */
+aside.panel{position:sticky;top:1rem;align-self:start;display:flex;flex-direction:column;gap:1rem}
+@media(max-width:980px){aside.panel{position:static}}
+.box{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.1rem 1.15rem;border-top:6px solid var(--blue)}
+.box.upload-box{border-top-color:var(--orange)}
+.box.filter-box{border-top-color:var(--teal)}
+.box h2{font-size:1.12rem;font-weight:900;margin-bottom:.6rem;display:flex;align-items:center;gap:.45rem}
+.box h2 .dot{width:12px;height:12px;border-radius:4px;display:inline-block}
+.dropzone{
+  border:2.5px dashed var(--blue);border-radius:14px;
+  padding:1.1rem .8rem;text-align:center;color:var(--ink-soft);
+  background:#F2F7FF;transition:background .2s,border-color .2s;font-size:.95rem;
+}
+.dropzone.drag{background:#E1EEFF;border-color:var(--orange)}
+.dropzone strong{color:var(--blue);font-size:1.02rem}
+.dropzone input{display:none}
+.pick-btn{
+  margin-top:.55rem;background:var(--blue);color:#fff;border:none;
+  border-radius:10px;padding:.5rem 1rem;font-size:.98rem;font-weight:700;
+}
+.status{
+  margin-top:.7rem;font-size:.92rem;border-radius:10px;padding:.55rem .7rem;display:none;
+}
+.status.ok{display:block;background:#E8F9EF;color:#146C3C;border:1px solid #B7E9CB}
+.status.err{display:block;background:#FDEBEB;color:#9A2323;border:1px solid #F5C4C4}
+.field{margin-bottom:.65rem}
+.field label{display:block;font-size:.92rem;font-weight:700;color:var(--ink-soft);margin-bottom:.2rem}
+.field input,.field select{
+  width:100%;padding:.5rem .6rem;border:1.5px solid var(--line);
+  border-radius:10px;background:#fff;color:var(--ink);
+}
+.field input:focus,.field select:focus{outline:2px solid var(--blue);border-color:var(--blue)}
+.year-row{display:flex;gap:.5rem;align-items:center}
+.year-row input{width:100%}
+.filter-actions{display:flex;gap:.55rem;margin-top:.4rem}
+.filter-actions .btn{flex:1;justify-content:center;padding:.55rem .4rem}
+.btn-apply{background:linear-gradient(135deg,var(--teal),#0aa08f)}
+.btn-reset{background:#fff;color:var(--ink-soft);border:2px solid var(--line);box-shadow:none}
+.hint{font-size:.85rem;color:var(--ink-soft);margin-top:.5rem}
+
+/* ── 右側儀表板 ───────────────────────── */
+main.board{display:flex;flex-direction:column;gap:1.2rem;min-width:0}
+.board-note{
+  background:#FFF7E8;border:1.5px solid #FFE2A8;border-radius:12px;
+  padding:.6rem 1rem;font-size:.95rem;color:#7A5A12;
+}
+.grid{display:grid;gap:1.2rem}
+.grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1280px){.grid.cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr}}
+
+.card{
+  background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:1.05rem 1.15rem 1.1rem;position:relative;overflow:hidden;
+  border-left:8px solid var(--blue);
+  transition:transform .18s,box-shadow .18s;
+}
+.card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(30,42,74,.14)}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.6rem;margin-bottom:.55rem}
+.card-head h3{font-size:1.14rem;font-weight:900;letter-spacing:.02em}
+.card-head .desc{font-size:.88rem;color:var(--ink-soft);margin-top:.1rem}
+.png-btn{
+  flex:none;border:none;background:#EEF3FF;color:var(--blue);
+  border-radius:9px;padding:.32rem .7rem;font-size:.85rem;font-weight:800;
+  transition:background .15s;
+}
+.png-btn:hover{background:var(--blue);color:#fff}
+.chart-wrap{position:relative;height:300px}
+.chart-wrap.tall{height:340px}
+
+/* KPI */
+#kpiCard{border-left-color:var(--orange)}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem}
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi{
+  border-radius:14px;padding:.75rem .85rem;color:#fff;position:relative;overflow:hidden;
+}
+.kpi .k-label{font-size:.9rem;font-weight:700;opacity:.92}
+.kpi .k-value{font-size:1.9rem;font-weight:900;line-height:1.25;letter-spacing:.02em}
+.kpi .k-sub{font-size:.82rem;opacity:.9}
+.kpi .k-icon{position:absolute;right:.6rem;top:.5rem;font-size:1.5rem;opacity:.5}
+.k1{background:linear-gradient(135deg,#FF8A5C,#FF6B35)}
+.k2{background:linear-gradient(135deg,#4D96FF,#2F80ED)}
+.k3{background:linear-gradient(135deg,#18C8B8,#00A896)}
+.k4{background:linear-gradient(135deg,#F272B6,#E9489B)}
+.k5{background:linear-gradient(135deg,#9B7DFF,#7C5CFC)}
+.k6{background:linear-gradient(135deg,#FFC53D,#F5A623);color:#5B430A}
+.k7{background:linear-gradient(135deg,#67C6E3,#3AA6D0)}
+.k8{background:linear-gradient(135deg,#8FCB6B,#5FA544)}
+
+/* 排行榜 */
+.rank-list{list-style:none;display:flex;flex-direction:column;gap:.45rem;max-height:340px;overflow:auto}
+.rank-list li{
+  display:flex;align-items:center;gap:.6rem;background:#F6F8FF;
+  border-radius:11px;padding:.42rem .65rem;font-size:.95rem;
+}
+.rank-list .medal{
+  flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:900;color:#fff;background:var(--ink-soft);font-size:.9rem;
+}
+.rank-list li:nth-child(1) .medal{background:linear-gradient(135deg,#FFD44D,#F2A93B)}
+.rank-list li:nth-child(2) .medal{background:linear-gradient(135deg,#C9D3E8,#9FB0CE)}
+.rank-list li:nth-child(3) .medal{background:linear-gradient(135deg,#F2B08B,#D98757)}
+.rank-list .r-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.rank-list .r-meta{font-size:.82rem;color:var(--ink-soft)}
+.rank-list .r-count{flex:none;font-weight:900;color:var(--pink)}
+
+/* 品質檢查 */
+.q-score{display:flex;align-items:center;gap:.8rem;margin-bottom:.7rem}
+.q-score .num{font-size:2rem;font-weight:900;color:var(--teal)}
+.q-bar{flex:1;height:14px;background:#EAF0FB;border-radius:99px;overflow:hidden}
+.q-bar .fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--teal),var(--blue));width:0;transition:width .8s}
+.q-list{list-style:none;display:grid;grid-template-columns:repeat(2,1fr);gap:.45rem;font-size:.93rem}
+@media(max-width:760px){.q-list{grid-template-columns:1fr}}
+.q-list li{background:#F6F8FF;border-radius:10px;padding:.4rem .6rem;display:flex;justify-content:space-between;gap:.5rem}
+.q-list li.warn{background:#FFF3F0;color:#A03A1E}
+.q-list li b{font-weight:900}
+.map-tags{margin-top:.7rem;display:flex;flex-wrap:wrap;gap:.35rem}
+.tag{font-size:.8rem;border-radius:99px;padding:.14rem .6rem;font-weight:700}
+.tag.on{background:#E4F7F0;color:#0E7A57;border:1px solid #A9E6CE}
+.tag.off{background:#F1F2F6;color:#8A90A6;border:1px dashed #C9CEDC}
+
+/* 明細表 */
+.tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:430px}
+table.detail{width:100%;border-collapse:collapse;font-size:.9rem;min-width:900px}
+table.detail th{
+  position:sticky;top:0;background:var(--ink);color:#fff;text-align:left;
+  padding:.5rem .6rem;font-size:.86rem;white-space:nowrap;z-index:1;
+}
+table.detail td{padding:.42rem .6rem;border-bottom:1px solid #EEF1F8;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+table.detail tr:nth-child(even){background:#F8FAFF}
+table.detail tr:hover{background:#EFF5FF}
+.tbl-foot{display:flex;align-items:center;justify-content:space-between;gap:.7rem;margin-top:.6rem;flex-wrap:wrap}
+.pager{display:flex;align-items:center;gap:.5rem;font-size:.92rem}
+.pager button{
+  border:1.5px solid var(--line);background:#fff;border-radius:9px;
+  padding:.3rem .75rem;font-weight:800;color:var(--blue);
+}
+.pager button:disabled{opacity:.4;cursor:default}
+.btn-csv{background:linear-gradient(135deg,var(--yellow),#F5A623);color:#5B430A;box-shadow:none;padding:.45rem .9rem}
+
+footer.foot{
+  text-align:center;color:var(--ink-soft);font-size:.88rem;padding:0 1rem 2rem;
+}
+
+/* Toast */
+#toast{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;border-radius:12px;padding:.6rem 1.2rem;
+  font-size:.95rem;opacity:0;pointer-events:none;transition:all .3s;z-index:99;
+  box-shadow:0 6px 20px rgba(0,0,0,.25);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition:none!important;animation:none!important}
+}
+
+/* ── 列印（輸出 PDF）樣式 ────────────────── */
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  body{background:#fff}
+  header.hero .hero-actions,aside.panel,.png-btn,.pager,.btn-csv,#toast,.board-note{display:none!important}
+  header.hero{border:none;padding:.3rem 0 .5rem}
+  .layout{display:block;padding:0;max-width:none}
+  .grid,.grid.cols-2,.grid.cols-3{display:block}
+  .card{
+    box-shadow:none;border:1px solid var(--line);border-left:8px solid var(--blue);
+    break-inside:avoid;page-break-inside:avoid;margin-bottom:8mm;width:100%;
+  }
+  .chart-wrap,.chart-wrap.tall{height:260px}
+  .tbl-wrap{max-height:none;overflow:visible}
+  table.detail{min-width:0;font-size:.75rem}
+  .card:hover{transform:none}
+}
+</style>
+</head>
+<body>
+
+<header class="hero" id="heroBar">
+  <div class="shelf" aria-hidden="true">
+    <div class="spine" style="height:40px;background:var(--orange)"></div>
+    <div class="spine" style="height:32px;background:var(--blue)"></div>
+    <div class="spine" style="height:44px;background:var(--teal)"></div>
+    <div class="spine" style="height:28px;background:var(--pink)"></div>
+    <div class="spine" style="height:38px;background:var(--yellow)"></div>
+    <div class="spine" style="height:30px;background:var(--purple)"></div>
+    <div class="spine lean" style="height:42px;background:var(--green)"></div>
+  </div>
+  <div class="hero-row">
+    <div>
+      <h1>📚 圖書館<span class="accent">館藏資訊</span>儀表板</h1>
+      <p class="sub">上傳 Excel／CSV 館藏清單，立即產生互動統計圖表｜資料只在你的瀏覽器內處理</p>
+    </div>
+    <div class="hero-actions">
+      <button class="btn btn-sound" id="soundBtn" title="切換音效">🔊 音效：開</button>
+      <button class="btn btn-demo" id="demoBtn">🎲 載入範例資料</button>
+      <button class="btn btn-pdf" id="pdfBtn">🖨️ 輸出完整 PDF</button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- 左側：上傳＋篩選 -->
+  <aside class="panel">
+    <section class="box upload-box">
+      <h2><span class="dot" style="background:var(--orange)"></span>匯入館藏資料</h2>
+      <label class="dropzone" id="dropzone">
+        <div>📥 將 <strong>.xlsx / .csv</strong> 檔拖曳到這裡</div>
+        <div>或</div>
+        <button type="button" class="pick-btn" id="pickBtn">選擇檔案</button>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      </label>
+      <div class="status" id="fileStatus"></div>
+      <p class="hint">💡 第一列請放欄位名稱（題名、作者、分類號、出版年、現況、借次…），系統會自動辨識常見欄名。</p>
+    </section>
+
+    <section class="box filter-box">
+      <h2><span class="dot" style="background:var(--teal)"></span>篩選條件</h2>
+      <div class="field">
+        <label for="fKeyword">關鍵字（題名／作者／出版者／登錄號…）</label>
+        <input type="text" id="fKeyword" placeholder="例如：哈利波特">
+      </div>
+      <div class="field">
+        <label for="fStatus">館藏現況</label>
+        <select id="fStatus"><option value="">全部</option></select>
+      </div>
+      <div class="field">
+        <label for="fClass">十大分類</label>
+        <select id="fClass"><option value="">全部</option></select>
+      </div>
+      <div class="field">
+        <label for="fSource">館藏來源</label>
+        <select id="fSource"><option value="">全部</option></select>
+      </div>
+      <div class="field">
+        <label for="fLang">語文別</label>
+        <select id="fLang"><option value="">全部</option></select>
+      </div>
+      <div class="field">
+        <label for="fLoc">館藏地</label>
+        <select id="fLoc"><option value="">全部</option></select>
+      </div>
+      <div class="field">
+        <label>出版年範圍</label>
+        <div class="year-row">
+          <input type="number" id="fYearFrom" placeholder="起（如 2000）">
+          <span>～</span>
+          <input type="number" id="fYearTo" placeholder="迄（如 2026）">
+        </div>
+      </div>
+      <div class="field">
+        <label for="fMinCirc">最低借閱次數</label>
+        <select id="fMinCirc">
+          <option value="0">不限</option>
+          <option value="1">至少 1 次</option>
+          <option value="3">至少 3 次</option>
+          <option value="5">至少 5 次</option>
+          <option value="10">至少 10 次</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-apply" id="applyBtn">✅ 套用篩選</button>
+        <button class="btn btn-reset" id="resetBtn">↩ 重設</button>
+      </div>
+    </section>
+  </aside>
+
+  <!-- 右側：儀表板 -->
+  <main class="board" id="board">
+    <div class="board-note" id="boardNote">目前顯示的是<b>內建範例資料</b>。請在左側上傳貴館的館藏 Excel／CSV 檔，即可看到自己的統計結果。</div>
+
+    <!-- KPI -->
+    <section class="card" id="kpiCard" data-title="館藏總覽KPI">
+      <div class="card-head">
+        <div><h3>🏫 館藏總覽</h3><div class="desc" id="kpiDesc"></div></div>
+        <button class="png-btn no-capture" data-target="kpiCard">⬇ PNG</button>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi k1"><div class="k-icon">📦</div><div class="k-label">館藏冊數</div><div class="k-value" id="kTotal">0</div><div class="k-sub">符合篩選的總冊數</div></div>
+        <div class="kpi k2"><div class="k-icon">📖</div><div class="k-label">不同題名數</div><div class="k-value" id="kTitles">0</div><div class="k-sub">題名種數</div></div>
+        <div class="kpi k3"><div class="k-icon">🔄</div><div class="k-label">借出中冊數</div><div class="k-value" id="kOut">0</div><div class="k-sub" id="kOutRate">借出率 0%</div></div>
+        <div class="kpi k4"><div class="k-icon">🔥</div><div class="k-label">累計借閱次數</div><div class="k-value" id="kCirc">0</div><div class="k-sub" id="kCircAvg">平均 0 次／冊</div></div>
+        <div class="kpi k5"><div class="k-icon">🗓️</div><div class="k-label">出版年中位數</div><div class="k-value" id="kYearMed">－</div><div class="k-sub">館藏新舊指標</div></div>
+        <div class="kpi k6"><div class="k-icon">💤</div><div class="k-label">零借閱館藏</div><div class="k-value" id="kZero">0</div><div class="k-sub" id="kZeroRate">占 0%</div></div>
+        <div class="kpi k7"><div class="k-icon">✍️</div><div class="k-label">作者人數</div><div class="k-value" id="kAuthors">0</div><div class="k-sub">不同作者</div></div>
+        <div class="kpi k8"><div class="k-icon">🏢</div><div class="k-label">出版者數</div><div class="k-value" id="kPubs">0</div><div class="k-sub">不同出版者</div></div>
+      </div>
+    </section>
+
+    <div class="grid cols-2">
+      <section class="card" id="classCard" style="border-left-color:var(--blue)" data-title="十大分類館藏量">
+        <div class="card-head">
+          <div><h3>📊 十大分類館藏量</h3><div class="desc">依分類號第一碼歸類｜點一下長條可直接篩選該類</div></div>
+          <button class="png-btn no-capture" data-target="classCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chClass"></canvas></div>
+      </section>
+
+      <section class="card" id="yearCard" style="border-left-color:var(--teal)" data-title="出版年分布">
+        <div class="card-head">
+          <div><h3>📈 出版年分布</h3><div class="desc">觀察館藏新舊與各年代出版量</div></div>
+          <button class="png-btn no-capture" data-target="yearCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chYear"></canvas></div>
+      </section>
+
+      <section class="card" id="acqCard" style="border-left-color:var(--purple)" data-title="購置年趨勢">
+        <div class="card-head">
+          <div><h3>🛒 購置年趨勢</h3><div class="desc">依購置（採購）日期統計各年新增館藏</div></div>
+          <button class="png-btn no-capture" data-target="acqCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chAcq"></canvas></div>
+      </section>
+
+      <section class="card" id="ageCard" style="border-left-color:var(--pink)" data-title="館齡分布">
+        <div class="card-head">
+          <div><h3>⏳ 館齡分布</h3><div class="desc">以出版年推算館藏年齡，辨識老舊館藏比例</div></div>
+          <button class="png-btn no-capture" data-target="ageCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chAge"></canvas></div>
+      </section>
+    </div>
+
+    <div class="grid cols-3">
+      <section class="card" id="srcCard" style="border-left-color:var(--orange)" data-title="館藏來源比例">
+        <div class="card-head">
+          <div><h3>🎁 館藏來源</h3><div class="desc">採購、贈送等比例</div></div>
+          <button class="png-btn no-capture" data-target="srcCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chSrc"></canvas></div>
+      </section>
+
+      <section class="card" id="langCard" style="border-left-color:var(--yellow)" data-title="語文別分布">
+        <div class="card-head">
+          <div><h3>🌏 語文別分布</h3><div class="desc">館藏語言組成</div></div>
+          <button class="png-btn no-capture" data-target="langCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chLang"></canvas></div>
+      </section>
+
+      <section class="card" id="heatCard" style="border-left-color:var(--red)" data-title="借閱熱度分布">
+        <div class="card-head">
+          <div><h3>🔥 借閱熱度</h3><div class="desc">各借閱次數區間的冊數</div></div>
+          <button class="png-btn no-capture" data-target="heatCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chHeat"></canvas></div>
+      </section>
+    </div>
+
+    <section class="card" id="statusCard" style="border-left-color:var(--green)" data-title="各分類館藏現況">
+      <div class="card-head">
+        <div><h3>🧩 各分類館藏現況</h3><div class="desc">每個分類的在架、借出與其他狀態堆疊圖</div></div>
+        <button class="png-btn no-capture" data-target="statusCard">⬇ PNG</button>
+      </div>
+      <div class="chart-wrap tall"><canvas id="chStatus"></canvas></div>
+    </section>
+
+    <div class="grid cols-3">
+      <section class="card" id="authorCard" style="border-left-color:var(--blue)" data-title="熱門作者Top10">
+        <div class="card-head">
+          <div><h3>✍️ 熱門作者 Top 10</h3><div class="desc">館藏冊數最多的作者</div></div>
+          <button class="png-btn no-capture" data-target="authorCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chAuthor"></canvas></div>
+      </section>
+
+      <section class="card" id="pubCard" style="border-left-color:var(--teal)" data-title="熱門出版者Top10">
+        <div class="card-head">
+          <div><h3>🏢 熱門出版者 Top 10</h3><div class="desc">館藏冊數最多的出版者</div></div>
+          <button class="png-btn no-capture" data-target="pubCard">⬇ PNG</button>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chPub"></canvas></div>
+      </section>
+
+      <section class="card" id="topCard" style="border-left-color:var(--pink)" data-title="熱門借閱排行Top10">
+        <div class="card-head">
+          <div><h3>🏆 熱門借閱排行</h3><div class="desc">借閱次數最高的館藏</div></div>
+          <button class="png-btn no-capture" data-target="topCard">⬇ PNG</button>
+        </div>
+        <ol class="rank-list" id="rankList"></ol>
+      </section>
+    </div>
+
+    <section class="card" id="qualityCard" style="border-left-color:var(--yellow)" data-title="資料品質檢查">
+      <div class="card-head">
+        <div><h3>🩺 資料品質檢查</h3><div class="desc">缺漏欄位、重複識別碼與欄位配對情形（依目前篩選結果）</div></div>
+        <button class="png-btn no-capture" data-target="qualityCard">⬇ PNG</button>
+      </div>
+      <div class="q-score">
+        <div class="num" id="qScore">100%</div>
+        <div class="q-bar"><div class="fill" id="qFill"></div></div>
+        <div style="font-size:.9rem;color:var(--ink-soft)">資料完整度評分</div>
+      </div>
+      <ul class="q-list" id="qList"></ul>
+      <div class="map-tags" id="mapTags"></div>
+    </section>
+
+    <section class="card" id="detailCard" style="border-left-color:var(--purple)" data-title="館藏明細">
+      <div class="card-head">
+        <div><h3>📋 館藏明細</h3><div class="desc" id="detailDesc">符合篩選的館藏清單</div></div>
+        <button class="png-btn no-capture" data-target="detailCard">⬇ PNG</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="detail">
+          <thead><tr>
+            <th>登錄號</th><th>題名</th><th>作者</th><th>出版者</th><th>分類號</th>
+            <th>出版年</th><th>館藏地</th><th>現況</th><th>來源</th><th>語文</th><th>借次</th>
+          </tr></thead>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+      <div class="tbl-foot">
+        <div class="pager">
+          <button id="pgPrev">← 上一頁</button>
+          <span id="pgInfo">第 1 / 1 頁</span>
+          <button id="pgNext">下一頁 →</button>
+        </div>
+        <button class="btn btn-csv no-capture" id="csvBtn">⬇ 下載篩選結果 CSV</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="foot">
+  圖書館館藏資訊儀表板｜資料僅於瀏覽器端處理，不會上傳到任何伺服器｜建議使用 Chrome 或 Edge 開啟
+</footer>
+
+<div id="toast"></div>
+<script>
+/* ═══════════════ 音效（Web Audio，無外部檔案） ═══════════════ */
+let soundOn = true, actx = null;
+function ac(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function tone(freq, t0, dur, type='sine', vol=0.15){
+  const c = ac(); if(!c) return;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, c.currentTime + t0);
+  g.gain.exponentialRampToValueAtTime(vol, c.currentTime + t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + t0 + dur);
+  o.connect(g).connect(c.destination);
+  o.start(c.currentTime + t0); o.stop(c.currentTime + t0 + dur + 0.05);
+}
+const sfx = {
+  click(){ if(soundOn) tone(660, 0, .09, 'triangle', .12); },
+  pop(){ if(soundOn){ tone(520,0,.08,'sine',.14); tone(780,.06,.1,'sine',.12);} },
+  success(){ if(soundOn){ tone(523,0,.12); tone(659,.11,.12); tone(784,.22,.2); } },
+  error(){ if(soundOn){ tone(220,0,.18,'sawtooth',.1); tone(165,.15,.25,'sawtooth',.1);} },
+  whoosh(){ if(soundOn){ tone(300,0,.05,'sine',.08); tone(450,.04,.05,'sine',.08); tone(600,.08,.07,'sine',.08);} }
+};
+
+/* ═══════════════ 小工具 ═══════════════ */
+const $ = s => document.querySelector(s);
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function fmt(n){ return Number(n).toLocaleString('zh-Hant'); }
+function todayStr(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}`; }
+function countUp(el, target, suffix=''){
+  const start = 0, dur = 700, t0 = performance.now();
+  function step(t){
+    const p = Math.min(1,(t-t0)/dur), v = Math.round(start + (target-start)*(1-Math.pow(1-p,3)));
+    el.textContent = fmt(v)+suffix;
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ═══════════════ 欄位辨識 ═══════════════ */
+const ALIASES = {
+  barcode:['登錄號','館藏登錄號','barcode','accession','條碼','條碼號'],
+  uid:['uid','唯一識別碼','系統號','書目號','紀錄號'],
+  title:['題名','書名','title','正題名'],
+  author:['作者','著者','author','creator'],
+  publisher:['出版者','出版社','publisher'],
+  callno:['分類號','索書號','callnumber','call number','classification','分類'],
+  year:['出版年','出版日期','出版年月','publicationyear','publication year','年代'],
+  location:['館藏地','館藏位置','典藏地','location','館別','典藏位置'],
+  status:['現況','館藏狀態','狀態','status','流通狀態'],
+  source:['來源','館藏來源','source','入藏來源'],
+  circ:['借次','借閱次數','借閱量','circulation','借閱數','累計借次'],
+  lang:['語文別','語言','language','語文'],
+  acq:['購置日期','採購日期','acquisitiondate','acquisition date','入館日期','登錄日期']
+};
+const FIELD_NAMES = {barcode:'登錄號',uid:'UID／系統號',title:'題名',author:'作者',publisher:'出版者',callno:'分類號',year:'出版年',location:'館藏地',status:'現況',source:'來源',circ:'借閱次數',lang:'語文別',acq:'購置日期'};
+function normHeader(h){ return String(h||'').toLowerCase().replace(/[\s_\-（）()：:／/]/g,''); }
+function mapHeaders(headers){
+  const map = {};
+  headers.forEach((h,i)=>{
+    const n = normHeader(h);
+    if(!n) return;
+    for(const key in ALIASES){
+      if(map[key]!==undefined) continue;
+      if(ALIASES[key].some(a=>{ const na=normHeader(a); return n===na || n.includes(na); })){ map[key]=i; break; }
+    }
+  });
+  return map;
+}
+function parseYear(v){
+  if(v===null||v===undefined||v==='') return null;
+  if(typeof v==='number'){
+    if(v>1800 && v<2200) return Math.floor(v);
+    if(v>0 && v<200) return v+1911;                    // 民國年
+    if(v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400*1000)); return d.getFullYear(); } // Excel 序號
+    return null;
+  }
+  const s = String(v).trim();
+  const roc = s.match(/民國\s*(\d{1,3})/); if(roc) return (+roc[1])+1911;
+  const m4 = s.match(/(1[89]\d{2}|20\d{2})/); if(m4) return +m4[1];
+  const m = s.match(/^(\d{1,3})(?:[./年-]|$)/); if(m && +m[1]>0 && +m[1]<200) return (+m[1])+1911;
+  return null;
+}
+function classDigit(callno){
+  const m = String(callno||'').match(/\d/);
+  return m ? m[0] : null;
+}
+const CLASS_NAMES = {'0':'0 總類','1':'1 哲學類','2':'2 宗教類','3':'3 科學類','4':'4 應用科學類','5':'5 社會科學類','6':'6 史地：中國','7':'7 史地：世界','8':'8 語文類','9':'9 藝術類'};
+
+function buildRecords(headers, rows){
+  const map = mapHeaders(headers);
+  const get = (r,k)=> map[k]!==undefined ? r[map[k]] : '';
+  const recs = rows.map((r,idx)=>{
+    const title = String(get(r,'title')??'').trim();
+    return {
+      barcode:String(get(r,'barcode')??'').trim(),
+      uid:String(get(r,'uid')??'').trim(),
+      title,
+      author:String(get(r,'author')??'').trim(),
+      publisher:String(get(r,'publisher')??'').trim(),
+      callno:String(get(r,'callno')??'').trim(),
+      year:parseYear(get(r,'year')),
+      location:String(get(r,'location')??'').trim(),
+      status:String(get(r,'status')??'').trim(),
+      source:String(get(r,'source')??'').trim(),
+      circ:(v=>{ const n=parseFloat(String(v).replace(/[^\d.]/g,'')); return isFinite(n)?Math.max(0,Math.round(n)):0; })(get(r,'circ')),
+      lang:String(get(r,'lang')??'').trim(),
+      acqYear:parseYear(get(r,'acq')),
+      _row:idx+2
+    };
+  }).filter(r=> r.title || r.barcode || r.callno);
+  recs.forEach(r=>{ r.cls = classDigit(r.callno); });
+  return {recs, map};
+}
+
+/* ═══════════════ 內建範例資料 ═══════════════ */
+function demoData(){
+  const seed=[
+    ['圖書館的祕密','林靜怡','知識森林出版','020.7',2019,'8'],
+    ['邏輯思考的一百堂課','陳大川','明日文化','159',2021,'12'],
+    ['哲學家的一天','蘇菲亞','思潮出版','107',2015,'5'],
+    ['世界宗教故事','張永和','大地書房','200.9',2012,'3'],
+    ['宇宙的起點','李天文','星空出版','323.9',2022,'21'],
+    ['有趣的數學謎題','王小明','快樂學習社','310',2020,'17'],
+    ['昆蟲觀察圖鑑','吳自然','綠光出版','387',2018,'14'],
+    ['程式設計初體驗','周科技','未來教育','312.2',2023,'26'],
+    ['AI 與我們的生活','黃智慧','未來教育','312.83',2024,'31'],
+    ['廚房裡的科學','蔡美味','生活家出版','427',2019,'9'],
+    ['醫學小百科','洪健康','康寧文化','410',2016,'6'],
+    ['理財素養第一課','鄭富足','金橋出版','563',2022,'11'],
+    ['法律常識好好玩','高正義','公民書坊','580',2021,'7'],
+    ['台灣史的十二堂課','許歷史','島嶼出版','677',2017,'13'],
+    ['絲路上的商隊','馬遠行','大地書房','690',2014,'4'],
+    ['世界地理探險','艾旅行','環球文化','716',2020,'16'],
+    ['埃及古文明','安考古','環球文化','761.3',2013,'8'],
+    ['成語故事一本通','孔文昌','國語日報社','802.18',2018,'22'],
+    ['英語會話輕鬆學','Amy Chen','語言橋','805.188',2021,'19'],
+    ['日語五十音入門','佐藤花子','語言橋','803.1',2022,'15'],
+    ['少年小說選','楊文學','青春文庫','863.59',2023,'28'],
+    ['詩的旅行','余光晴','青春文庫','851',2016,'5'],
+    ['奇幻森林冒險記','J. K. 華生','魔法屋出版','873.57',2024,'35'],
+    ['名畫裡的故事','梵谷迷','美感出版','940.7',2019,'10'],
+    ['吉他自學手冊','林樂音','音符文化','916.65',2020,'18'],
+    ['桌遊設計實驗室','趣玩團隊','遊戲學堂','997',2023,'24'],
+    ['攝影構圖的眼睛','光影人','美感出版','953.9',2021,'9'],
+    ['籃球技術圖解','喬丹生','運動家出版','528.952',2022,'27'],
+    ['環境保護行動指南','綠色公民','地球村出版','445.9',2023,'12'],
+    ['心理學與日常','安心怡','思潮出版','170',2020,'20']
+  ];
+  const locations=['一樓普通書區','一樓普通書區','一樓普通書區','二樓參考書區','閱覽室','班級書箱'];
+  const statuses=['在架上','在架上','在架上','在架上','借出中','借出中','整理中'];
+  const sources=['採購','採購','採購','贈送','交換'];
+  const langs=['中文','中文','中文','中文','英文','日文'];
+  const recs=[];
+  let id=100001;
+  seed.forEach((s,i)=>{
+    const copies = 1 + (i%3);
+    for(let c=0;c<copies;c++){
+      const circ = Math.max(0, parseInt(s[5]) - c*3 + ((i*7+c*5)%4) - (i%11===0?parseInt(s[5]):0));
+      recs.push({
+        barcode:'A'+(id++),
+        uid:'B'+(900000+i*10+c),
+        title:s[0], author:s[1], publisher:s[2], callno:s[3]+' '+ '8'+((i*3+c)%10)+((i*7)%10)+((c*3)%10),
+        year:s[4]-(c===2?4:0),
+        location:locations[(i+c)%locations.length],
+        status:statuses[(i*2+c)%statuses.length],
+        source:sources[(i+c)%sources.length],
+        circ:Math.max(0,circ),
+        lang:langs[(i+c*2)%langs.length],
+        acqYear:Math.min(2026, s[4]+(c%2)),
+        cls:s[3][0], _row:recs.length+2
+      });
+    }
+  });
+  return recs;
+}
+
+/* ═══════════════ 檔案讀取 ═══════════════ */
+let allRecords = [], headerMap = null, usingDemo = true;
+
+function handleFile(file){
+  const name = file.name.toLowerCase();
+  const reader = new FileReader();
+  reader.onerror = ()=>{ showStatus(false,'讀取檔案失敗，請重新選擇。'); sfx.error(); };
+  if(name.endsWith('.csv')){
+    reader.onload = e=>{
+      try{
+        const buf = new Uint8Array(e.target.result);
+        let text;
+        try{ text = new TextDecoder('utf-8',{fatal:true}).decode(buf); }
+        catch(_){ text = new TextDecoder('big5').decode(buf); }
+        const wb = XLSX.read(text, {type:'string'});
+        loadWorkbook(wb, file.name);
+      }catch(err){ console.error(err); showStatus(false,'CSV 解析失敗：'+err.message); sfx.error(); }
+    };
+    reader.readAsArrayBuffer(file);
+  }else if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+    reader.onload = e=>{
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+        loadWorkbook(wb, file.name);
+      }catch(err){ console.error(err); showStatus(false,'Excel 解析失敗：'+err.message); sfx.error(); }
+    };
+    reader.readAsArrayBuffer(file);
+  }else{
+    showStatus(false,'僅支援 .xlsx、.xls 或 .csv 檔案。'); sfx.error();
+  }
+}
+function loadWorkbook(wb, filename){
+  let best=null, bestRows=-1;
+  wb.SheetNames.forEach(sn=>{
+    const arr = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:'', raw:true});
+    const dataRows = arr.filter(r=>r.some(c=>String(c).trim()!=='')).length;
+    if(dataRows>bestRows){ bestRows=dataRows; best=arr; }
+  });
+  if(!best || best.length<2){ showStatus(false,'找不到可用的工作表資料（至少需要標題列＋一列資料）。'); sfx.error(); return; }
+  const headers = best[0];
+  const rows = best.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
+  const {recs, map} = buildRecords(headers, rows);
+  if(!recs.length){ showStatus(false,'讀到了檔案，但無法辨識任何資料列，請確認第一列為欄位名稱。'); sfx.error(); return; }
+  allRecords = recs; headerMap = map; usingDemo = false;
+  $('#boardNote').style.display='none';
+  showStatus(true, `已載入「${filename}」，共 ${fmt(recs.length)} 筆館藏資料。`);
+  buildFilterOptions(); resetFilters(false); applyFilters();
+  sfx.success(); toast('📚 資料載入成功！');
+}
+function showStatus(ok,msg){
+  const el = $('#fileStatus');
+  el.className = 'status ' + (ok?'ok':'err');
+  el.textContent = (ok?'✅ ':'⚠️ ') + msg;
+}
+
+/* ═══════════════ 篩選 ═══════════════ */
+let filtered = [];
+function uniqueSorted(list){ return [...new Set(list.filter(v=>v))].sort((a,b)=>String(a).localeCompare(String(b),'zh-Hant')); }
+function fillSelect(sel, values, labelFn){
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部</option>' + values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${labelFn?labelFn(v):v}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+function buildFilterOptions(){
+  fillSelect($('#fStatus'), uniqueSorted(allRecords.map(r=>r.status)));
+  fillSelect($('#fClass'), uniqueSorted(allRecords.map(r=>r.cls)), v=>CLASS_NAMES[v]||v);
+  fillSelect($('#fSource'), uniqueSorted(allRecords.map(r=>r.source)));
+  fillSelect($('#fLang'), uniqueSorted(allRecords.map(r=>r.lang)));
+  fillSelect($('#fLoc'), uniqueSorted(allRecords.map(r=>r.location)));
+}
+function resetFilters(apply=true){
+  ['#fKeyword','#fYearFrom','#fYearTo'].forEach(s=>$(s).value='');
+  ['#fStatus','#fClass','#fSource','#fLang','#fLoc'].forEach(s=>$(s).value='');
+  $('#fMinCirc').value='0';
+  if(apply){ applyFilters(); sfx.whoosh(); toast('已重設所有篩選條件'); }
+}
+function applyFilters(){
+  const kw = $('#fKeyword').value.trim().toLowerCase();
+  const st = $('#fStatus').value, cl = $('#fClass').value, sr = $('#fSource').value;
+  const lg = $('#fLang').value, lc = $('#fLoc').value;
+  const y1 = parseInt($('#fYearFrom').value), y2 = parseInt($('#fYearTo').value);
+  const mc = parseInt($('#fMinCirc').value)||0;
+  filtered = allRecords.filter(r=>{
+    if(kw){
+      const hay = [r.title,r.author,r.publisher,r.barcode,r.uid,r.callno,r.location].join(' ').toLowerCase();
+      if(!hay.includes(kw)) return false;
+    }
+    if(st && r.status!==st) return false;
+    if(cl && r.cls!==cl) return false;
+    if(sr && r.source!==sr) return false;
+    if(lg && r.lang!==lg) return false;
+    if(lc && r.location!==lc) return false;
+    if(isFinite(y1) && (r.year===null || r.year<y1)) return false;
+    if(isFinite(y2) && (r.year===null || r.year>y2)) return false;
+    if(mc>0 && r.circ<mc) return false;
+    return true;
+  });
+  page = 1;
+  renderAll();
+}
+
+/* ═══════════════ 圖表 ═══════════════ */
+const PALETTE = ['#2F80ED','#FF7A45','#00B8A9','#EF5DA8','#FFC53D','#7C5CFC','#27AE60','#EB5757','#3AA6D0','#F2994A'];
+Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+Chart.defaults.font.size = 13.5;
+Chart.defaults.color = '#3A466B';
+const charts = {};
+function makeChart(id, config){
+  if(charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+function countBy(list, keyFn){
+  const m = new Map();
+  list.forEach(r=>{ const k = keyFn(r); m.set(k,(m.get(k)||0)+1); });
+  return m;
+}
+function topN(map, n, excludeEmpty=true){
+  return [...map.entries()]
+    .filter(([k])=>!excludeEmpty || (k!==''&&k!=null&&k!=='(未填)'))
+    .sort((a,b)=>b[1]-a[1]).slice(0,n);
+}
+
+function renderAll(){
+  renderKPIs(); renderClassChart(); renderYearChart(); renderAcqChart(); renderAgeChart();
+  renderSrcChart(); renderLangChart(); renderHeatChart(); renderStatusChart();
+  renderAuthorChart(); renderPubChart(); renderRank(); renderQuality(); renderDetail();
+}
+
+function renderKPIs(){
+  const n = filtered.length;
+  $('#kpiDesc').textContent = usingDemo
+    ? `範例資料共 ${fmt(allRecords.length)} 筆，目前符合篩選 ${fmt(n)} 筆`
+    : `已上傳 ${fmt(allRecords.length)} 筆，目前符合篩選 ${fmt(n)} 筆`;
+  countUp($('#kTotal'), n);
+  countUp($('#kTitles'), new Set(filtered.map(r=>r.title).filter(Boolean)).size);
+  const out = filtered.filter(r=>/借出|外借|出借/.test(r.status)).length;
+  countUp($('#kOut'), out);
+  $('#kOutRate').textContent = '借出率 ' + (n? (out/n*100).toFixed(1):'0') + '%';
+  const circ = filtered.reduce((s,r)=>s+r.circ,0);
+  countUp($('#kCirc'), circ);
+  $('#kCircAvg').textContent = '平均 ' + (n? (circ/n).toFixed(1):'0') + ' 次／冊';
+  const ys = filtered.map(r=>r.year).filter(y=>y).sort((a,b)=>a-b);
+  $('#kYearMed').textContent = ys.length ? ys[Math.floor(ys.length/2)] : '－';
+  const zero = filtered.filter(r=>r.circ===0).length;
+  countUp($('#kZero'), zero);
+  $('#kZeroRate').textContent = '占 ' + (n? (zero/n*100).toFixed(1):'0') + '%';
+  countUp($('#kAuthors'), new Set(filtered.map(r=>r.author).filter(Boolean)).size);
+  countUp($('#kPubs'), new Set(filtered.map(r=>r.publisher).filter(Boolean)).size);
+}
+
+function renderClassChart(){
+  const digits = ['0','1','2','3','4','5','6','7','8','9'];
+  const m = countBy(filtered, r=>r.cls||'未分類');
+  const labels = digits.map(d=>CLASS_NAMES[d]);
+  const data = digits.map(d=>m.get(d)||0);
+  if(m.get('未分類')){ labels.push('未分類'); data.push(m.get('未分類')); }
+  makeChart('chClass',{
+    type:'bar',
+    data:{labels, datasets:[{data, backgroundColor:labels.map((_,i)=>PALETTE[i%PALETTE.length]), borderRadius:8}]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${fmt(c.parsed.y)} 冊`}}},
+      scales:{x:{ticks:{autoSkip:false,maxRotation:45,minRotation:0}}, y:{beginAtZero:true,ticks:{precision:0}}},
+      onClick(evt, els){
+        if(!els.length) return;
+        const label = this.data.labels[els[0].index];
+        const d = label==='未分類' ? '' : label[0];
+        if(d){ $('#fClass').value = d; applyFilters(); sfx.pop(); toast(`已篩選：${CLASS_NAMES[d]}`); }
+      }
+    }
+  });
+}
+function renderYearChart(){
+  const ys = filtered.map(r=>r.year).filter(Boolean);
+  let labels=[], data=[];
+  if(ys.length){
+    const min=Math.min(...ys), max=Math.max(...ys);
+    const m = countBy(filtered, r=>r.year);
+    for(let y=min;y<=max;y++){ labels.push(y); data.push(m.get(y)||0); }
+  }
+  makeChart('chYear',{
+    type:'line',
+    data:{labels, datasets:[{data, fill:true, tension:.35,
+      borderColor:'#00B8A9', backgroundColor:'rgba(0,184,169,.18)',
+      pointBackgroundColor:'#00B8A9', pointRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${fmt(c.parsed.y)} 冊`}}},
+      scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+function renderAcqChart(){
+  const m = countBy(filtered.filter(r=>r.acqYear), r=>r.acqYear);
+  const years=[...m.keys()].sort((a,b)=>a-b);
+  makeChart('chAcq',{
+    type:'bar',
+    data:{labels:years, datasets:[{data:years.map(y=>m.get(y)), backgroundColor:'#7C5CFC', borderRadius:8}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` 新增 ${fmt(c.parsed.y)} 冊`}}},
+      scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+function renderAgeChart(){
+  const now = new Date().getFullYear();
+  const buckets = {'5 年內':0,'6–10 年':0,'11–20 年':0,'超過 20 年':0,'年代不明':0};
+  filtered.forEach(r=>{
+    if(!r.year){ buckets['年代不明']++; return; }
+    const age = now - r.year;
+    if(age<=5) buckets['5 年內']++;
+    else if(age<=10) buckets['6–10 年']++;
+    else if(age<=20) buckets['11–20 年']++;
+    else buckets['超過 20 年']++;
+  });
+  makeChart('chAge',{
+    type:'bar',
+    data:{labels:Object.keys(buckets), datasets:[{data:Object.values(buckets),
+      backgroundColor:['#27AE60','#FFC53D','#FF7A45','#EB5757','#9FB0CE'], borderRadius:8}]},
+    options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${fmt(c.parsed.x)} 冊`}}},
+      scales:{x:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+function pieChart(id, map, colors){
+  const sorted = [...map.entries()].sort((a,b)=>b[1]-a[1]);
+  const entries = sorted.slice(0,8);
+  const others = sorted.slice(8).reduce((s,e)=>s+e[1],0);
+  const labels = entries.map(e=>e[0]||'(未填)');
+  const data = entries.map(e=>e[1]);
+  if(others>0){ labels.push('其他'); data.push(others); }
+  makeChart(id,{
+    type:'doughnut',
+    data:{labels, datasets:[{data, backgroundColor:colors, borderWidth:2, borderColor:'#fff'}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'55%',
+      plugins:{legend:{position:'bottom', labels:{boxWidth:14, padding:10}},
+        tooltip:{callbacks:{label:c=>{
+          const total=c.dataset.data.reduce((a,b)=>a+b,0);
+          return ` ${c.label}：${fmt(c.parsed)} 冊（${(c.parsed/total*100).toFixed(1)}%）`;}}}}}
+  });
+}
+function renderSrcChart(){ pieChart('chSrc', countBy(filtered, r=>r.source||'(未填)'), PALETTE); }
+function renderLangChart(){ pieChart('chLang', countBy(filtered, r=>r.lang||'(未填)'), ['#FFC53D','#2F80ED','#EF5DA8','#00B8A9','#7C5CFC','#FF7A45','#27AE60','#9FB0CE','#EB5757']); }
+function renderHeatChart(){
+  const buckets = {'0 次':0,'1–2 次':0,'3–5 次':0,'6–10 次':0,'11 次以上':0};
+  filtered.forEach(r=>{
+    if(r.circ===0) buckets['0 次']++;
+    else if(r.circ<=2) buckets['1–2 次']++;
+    else if(r.circ<=5) buckets['3–5 次']++;
+    else if(r.circ<=10) buckets['6–10 次']++;
+    else buckets['11 次以上']++;
+  });
+  makeChart('chHeat',{
+    type:'bar',
+    data:{labels:Object.keys(buckets), datasets:[{data:Object.values(buckets),
+      backgroundColor:['#9FB0CE','#67C6E3','#FFC53D','#FF7A45','#EB5757'], borderRadius:8}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${fmt(c.parsed.y)} 冊`}}},
+      scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+function renderStatusChart(){
+  const digits=['0','1','2','3','4','5','6','7','8','9'];
+  const cats={onShelf:r=>/在架|在館|可借/.test(r.status), out:r=>/借出|外借|出借/.test(r.status)};
+  const onShelf=[], out=[], other=[];
+  digits.forEach(d=>{
+    const g = filtered.filter(r=>r.cls===d);
+    const a = g.filter(cats.onShelf).length, b = g.filter(cats.out).length;
+    onShelf.push(a); out.push(b); other.push(g.length-a-b);
+  });
+  makeChart('chStatus',{
+    type:'bar',
+    data:{labels:digits.map(d=>CLASS_NAMES[d]), datasets:[
+      {label:'在架上', data:onShelf, backgroundColor:'#27AE60', borderRadius:6},
+      {label:'借出中', data:out, backgroundColor:'#FF7A45', borderRadius:6},
+      {label:'其他狀態', data:other, backgroundColor:'#C9D3E8', borderRadius:6}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom'}},
+      scales:{x:{stacked:true,ticks:{autoSkip:false,maxRotation:45}}, y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+function hBarChart(id, entries, color){
+  makeChart(id,{
+    type:'bar',
+    data:{labels:entries.map(e=>e[0]), datasets:[{data:entries.map(e=>e[1]), backgroundColor:color, borderRadius:8}]},
+    options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${fmt(c.parsed.x)} 冊`}}},
+      scales:{x:{beginAtZero:true,ticks:{precision:0}},
+        y:{ticks:{callback(v){ const l=this.getLabelForValue(v); return l.length>9? l.slice(0,9)+'…':l; }}}}}
+  });
+}
+function renderAuthorChart(){ hBarChart('chAuthor', topN(countBy(filtered.filter(r=>r.author), r=>r.author),10), '#2F80ED'); }
+function renderPubChart(){ hBarChart('chPub', topN(countBy(filtered.filter(r=>r.publisher), r=>r.publisher),10), '#00B8A9'); }
+
+function renderRank(){
+  const byTitle = new Map();
+  filtered.forEach(r=>{
+    const k = r.title||'(無題名)';
+    const cur = byTitle.get(k) || {circ:0, author:r.author, callno:r.callno};
+    cur.circ += r.circ; byTitle.set(k,cur);
+  });
+  const top = [...byTitle.entries()].sort((a,b)=>b[1].circ-a[1].circ).slice(0,10);
+  $('#rankList').innerHTML = top.length ? top.map(([t,info],i)=>`
+    <li>
+      <span class="medal">${i+1}</span>
+      <span class="r-title" title="${t}">${t}<div class="r-meta">${info.author||''}　${info.callno? '｜'+info.callno.split(' ')[0]:''}</div></span>
+      <span class="r-count">${fmt(info.circ)} 次</span>
+    </li>`).join('')
+    : '<li><span class="r-title">目前篩選結果沒有借閱資料</span></li>';
+}
+
+function renderQuality(){
+  const n = filtered.length || 1;
+  const missTitle = filtered.filter(r=>!r.title).length;
+  const missAuthor = filtered.filter(r=>!r.author).length;
+  const missYear = filtered.filter(r=>!r.year).length;
+  const missCall = filtered.filter(r=>!r.callno).length;
+  const ids = filtered.map(r=>r.barcode||r.uid).filter(Boolean);
+  const dup = ids.length - new Set(ids).size;
+  const locCount = countBy(filtered.filter(r=>r.location), r=>r.location);
+  const oddLocs = [...locCount.entries()].filter(([,c])=>c===1).map(([l])=>l);
+  const fields=[missTitle,missAuthor,missYear,missCall];
+  const completeness = Math.round((1 - fields.reduce((s,v)=>s+v,0)/(fields.length*n))*100);
+  $('#qScore').textContent = completeness + '%';
+  requestAnimationFrame(()=>{ $('#qFill').style.width = completeness + '%'; });
+  const item=(label,val,warnIf)=>`<li class="${val>warnIf?'warn':''}"><span>${label}</span><b>${fmt(val)} 筆</b></li>`;
+  $('#qList').innerHTML =
+    item('缺題名', missTitle,0)+item('缺作者', missAuthor,0)+
+    item('缺出版年', missYear,0)+item('缺分類號', missCall,0)+
+    item('重複登錄號／UID', dup,0)+
+    `<li class="${oddLocs.length?'warn':''}"><span>疑似異常館藏地（僅出現 1 次）</span><b>${oddLocs.length? oddLocs.slice(0,3).join('、')+(oddLocs.length>3?'…':''):'無'}</b></li>`;
+  const tags = Object.keys(FIELD_NAMES).map(k=>{
+    const on = usingDemo ? true : (headerMap && headerMap[k]!==undefined);
+    return `<span class="tag ${on?'on':'off'}">${on?'✓':'✕'} ${FIELD_NAMES[k]}</span>`;
+  }).join('');
+  $('#mapTags').innerHTML = `<span style="font-size:.85rem;color:var(--ink-soft);width:100%">欄位配對結果：</span>` + tags;
+}
+
+/* ═══════════════ 明細表與 CSV ═══════════════ */
+let page = 1; const PAGE_SIZE = 12;
+function renderDetail(){
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  page = Math.min(page, totalPages);
+  const rows = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  $('#detailBody').innerHTML = rows.length ? rows.map(r=>`
+    <tr><td>${r.barcode||''}</td><td title="${r.title}">${r.title||''}</td><td>${r.author||''}</td>
+    <td>${r.publisher||''}</td><td>${r.callno||''}</td><td>${r.year??''}</td>
+    <td>${r.location||''}</td><td>${r.status||''}</td><td>${r.source||''}</td>
+    <td>${r.lang||''}</td><td style="text-align:right">${fmt(r.circ)}</td></tr>`).join('')
+    : '<tr><td colspan="11" style="text-align:center;padding:1.2rem;color:var(--ink-soft)">沒有符合篩選條件的館藏</td></tr>';
+  $('#detailDesc').textContent = `符合篩選共 ${fmt(filtered.length)} 筆（本頁顯示 ${rows.length} 筆）`;
+  $('#pgInfo').textContent = `第 ${page} / ${totalPages} 頁`;
+  $('#pgPrev').disabled = page<=1; $('#pgNext').disabled = page>=totalPages;
+}
+function downloadCSV(){
+  if(!filtered.length){ toast('目前沒有可下載的資料'); sfx.error(); return; }
+  const head = ['登錄號','UID','題名','作者','出版者','分類號','出版年','館藏地','現況','來源','語文別','借閱次數','購置年'];
+  const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const lines = [head.map(esc).join(',')].concat(filtered.map(r=>
+    [r.barcode,r.uid,r.title,r.author,r.publisher,r.callno,r.year??'',r.location,r.status,r.source,r.lang,r.circ,r.acqYear??''].map(esc).join(',')));
+  const blob = new Blob(['\uFEFF'+lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `館藏篩選結果_${todayStr()}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  sfx.pop(); toast('已下載篩選結果 CSV');
+}
+
+/* ═══════════════ PNG 下載 ═══════════════ */
+async function downloadPNG(cardId){
+  const card = document.getElementById(cardId);
+  const name = card.dataset.title || cardId;
+  toast('正在產生圖片…');
+  try{
+    const canvas = await html2canvas(card, {
+      backgroundColor:'#FFFFFF', scale:2, useCORS:true, logging:false,
+      ignoreElements: el => el.classList && el.classList.contains('no-capture')
+    });
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `${name}_${todayStr()}.png`;
+    a.click();
+    sfx.pop(); toast(`已下載「${name}」PNG`);
+  }catch(err){
+    console.error(err); sfx.error();
+    toast('PNG 產生失敗，請改用 Chrome／Edge 再試');
+  }
+}
+
+/* ═══════════════ 事件綁定 ═══════════════ */
+$('#pickBtn').addEventListener('click', e=>{ e.preventDefault(); sfx.click(); $('#fileInput').click(); });
+$('#fileInput').addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=''; });
+const dz = $('#dropzone');
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('drag'); }));
+dz.addEventListener('drop', e=>{ const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+
+$('#applyBtn').addEventListener('click', ()=>{ applyFilters(); sfx.click(); toast(`已套用篩選，共 ${fmt(filtered.length)} 筆`); });
+$('#resetBtn').addEventListener('click', ()=>resetFilters(true));
+$('#fKeyword').addEventListener('keydown', e=>{ if(e.key==='Enter'){ applyFilters(); sfx.click(); }});
+$('#pgPrev').addEventListener('click', ()=>{ page--; renderDetail(); sfx.click(); });
+$('#pgNext').addEventListener('click', ()=>{ page++; renderDetail(); sfx.click(); });
+$('#csvBtn').addEventListener('click', downloadCSV);
+document.querySelectorAll('.png-btn').forEach(b=>b.addEventListener('click', ()=>downloadPNG(b.dataset.target)));
+$('#pdfBtn').addEventListener('click', ()=>{
+  sfx.whoosh(); toast('開啟列印視窗：目的地請選「另存為 PDF」，並勾選背景圖形');
+  setTimeout(()=>window.print(), 350);
+});
+$('#demoBtn').addEventListener('click', ()=>{
+  allRecords = demoData(); headerMap=null; usingDemo=true;
+  $('#boardNote').style.display='';
+  showStatus(true, `已載入內建範例資料，共 ${fmt(allRecords.length)} 筆。`);
+  buildFilterOptions(); resetFilters(false); applyFilters();
+  sfx.success(); toast('已載入範例資料');
+});
+$('#soundBtn').addEventListener('click', ()=>{
+  soundOn = !soundOn;
+  const b = $('#soundBtn');
+  b.textContent = soundOn ? '🔊 音效：開' : '🔇 音效：關';
+  b.classList.toggle('off', !soundOn);
+  if(soundOn) sfx.pop();
+});
+
+/* ═══════════════ 啟動 ═══════════════ */
+allRecords = demoData();
+buildFilterOptions();
+applyFilters();
+</script>
+</body>
+</html>
